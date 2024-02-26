@@ -32,9 +32,7 @@ async def create_message(message: MessageCreateModel):
 
     except Exception as e:
         custom_logger.exception(e)
-        return BaseResponse.error_response(
-            status_code=400, message="Internal Server Error"
-        )
+        return BaseResponse.error_response(message="Internal Server Error")
 
 
 @router.get(
@@ -55,6 +53,4 @@ async def get_messages_of_session(session_id: str):
 
     except Exception as e:
         custom_logger.exception(e)
-        return BaseResponse.error_response(
-            status_code=400, message="Internal Server Error"
-        )
+        return BaseResponse.error_response(message="Internal Server Error")

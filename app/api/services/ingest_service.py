@@ -4,22 +4,18 @@ import os
 from io import BytesIO
 from typing import List, Dict, Type
 from pathlib import Path
-from llama_index.core import VectorStoreIndex, SimpleDirectoryReader
+from llama_index.core import VectorStoreIndex
 from llama_index.core.schema import Document, TextNode, BaseNode
 from llama_index.core.indices import VectorStoreIndex, load_index_from_storage
 from llama_index.core.storage import StorageContext
-from llama_index.storage.docstore.mongodb import MongoDocumentStore
-from llama_index.storage.index_store.mongodb import MongoIndexStore
-from llama_index.vector_stores.qdrant import QdrantVectorStore
 from llama_index.core.readers import StringIterableReader
 from llama_index.core.readers.base import BaseReader
 from llama_index.embeddings.openai import OpenAIEmbedding
-from llama_index.core.node_parser import SimpleNodeParser, SentenceSplitter
+from llama_index.core.node_parser import SentenceSplitter
 
-from app.api.database.vector_db import vector_db_client
+from app.api.database.mongo_db import vector_store, index_store, doc_store
 from app.api.database.execute.docs_execute import DocsExecute
 from app.api.helpers.ingest_helper import IngestHelper
-from app.api.helpers.readers.web_reader import WebBaseLoader
 from app.api.helpers.readers.remote_reader import RemoteReader
 from app.api.errors.error_message import (
     UnsupportedFileTypeError,
@@ -38,15 +34,6 @@ class IngestService:
     def __init__(self) -> None:
         self.ingest_helper = IngestHelper()
         self.default_file_reader_cls = self.get_file_reader_cls()
-        self.vector_store = QdrantVectorStore(
-            client=vector_db_client, collection_name=config.COLLECTION_NAME
-        )
-        self.index_store = MongoIndexStore.from_uri(
-            config.MONGO_URI, db_name=config.MONGO_DB_NAME
-        )
-        self.doc_store = MongoDocumentStore.from_uri(
-            config.MONGO_URI, db_name=config.MONGO_DB_NAME
-        )
         self.index = self.get_or_create_index()
 
     @staticmethod
@@ -111,7 +98,6 @@ class IngestService:
 
         documents = self.convert_file_to_docs(file_path=file_path)
 
-        # self.add_docs(documents=documents)
         self.add_nodes(documents=documents)
 
         return documents
@@ -158,24 +144,22 @@ class IngestService:
 
         loader = RemoteReader()
         documents = loader.load_data(url)
+        for document in documents:
+            document.metadata["doc_id"] = document.doc_id
+            document.text = self.ingest_helper.strip_consecutive_newlines(
+                document.text
+            ).strip()
 
         return documents
 
-    def get_or_create_index(self):
+    @staticmethod
+    def get_or_create_index():
         """Get or create an index."""
-        node_parser = SimpleNodeParser.from_defaults(
-            chunk_size=1024,
-            chunk_overlap=32,
-        )
-
-        embed_model = OpenAIEmbedding(api_key=config.OPENAI_API_KEY)
-
-        transformations = [node_parser, embed_model]
 
         storage_context = StorageContext.from_defaults(
-            docstore=self.doc_store,
-            index_store=self.index_store,
-            vector_store=self.vector_store,
+            docstore=doc_store,
+            index_store=index_store,
+            vector_store=vector_store,
         )
 
         existing_indexes = docs_execute.get_existing_indexes()
@@ -191,13 +175,13 @@ class IngestService:
         index = VectorStoreIndex.from_documents(
             documents=[],
             storage_context=storage_context,
-            transformations=transformations,
             store_nodes_override=True,
             show_progress=True,
             index_id="mongo-index",
         )
         index.set_index_id("mongo-index")
         custom_logger.info(f"Created a new vector store index")
+
         return index
 
     def add_docs(self, documents: List[Document]) -> List[Document]:
@@ -214,21 +198,25 @@ class IngestService:
 
     def add_nodes(self, documents: List[Document]) -> List[BaseNode]:
         """Add nodes to the index."""
-        parser = SentenceSplitter()
+        parser = SentenceSplitter(chunk_size=1024, chunk_overlap=200)
         nodes = parser.get_nodes_from_documents(documents, show_progress=True)
 
         # use multiple api keys to avoid rate limits and increase speed
         list_api_keys = config.OPENAI_API_KEY_EMBEDDINGS
         usage_counts = {key: 0 for key in list_api_keys}
         api_key_index = 0
-        embed_model = OpenAIEmbedding(api_key=list_api_keys[api_key_index])
+        embed_model = OpenAIEmbedding(
+            api_key=list_api_keys[api_key_index], model="text-embedding-3-small"
+        )
 
         for node in nodes:
             # if usage count is greater than 3, switch to the next api key
             if usage_counts[list_api_keys[api_key_index]] >= 3:
                 api_key_index = (api_key_index + 1) % len(list_api_keys)
                 usage_counts[list_api_keys[api_key_index]] = 0
-                embed_model = OpenAIEmbedding(api_key=list_api_keys[api_key_index])
+                embed_model = OpenAIEmbedding(
+                    api_key=list_api_keys[api_key_index], model="text-embedding-3-small"
+                )
 
             node_embedding = embed_model.get_text_embedding(
                 node.get_content(metadata_mode="all")
@@ -237,7 +225,6 @@ class IngestService:
             usage_counts[list_api_keys[api_key_index]] += 1
 
         self.index.insert_nodes(nodes, show_progress=True)
-        custom_logger.debug(nodes)
 
         return nodes
 
@@ -248,34 +235,41 @@ class IngestService:
         return list(documents)
 
     @staticmethod
-    def get_docs_by_file_name(file_name: str) -> List[TextNode]:
-        """Get documents by file name."""
-        documents = docs_execute.get_docs_by_file_name(file_name)
+    def get_docs_by_source(source: str) -> List[TextNode]:
+        """Get documents by source."""
+        documents = docs_execute.get_docs_by_source(source=source)
 
         return list(documents)
 
-    def get_files(self) -> List[str]:
-        """Get all files."""
-        files = self.ingest_helper.get_all_files()
+    # def get_files(self) -> List[str]:
+    #     """Get all files."""
+    #     files = self.ingest_helper.get_all_files()
 
-        return files
+    #     return files
 
-    def delete_docs_by_file_name(self, file_name: str):
-        """Delete documents by file name."""
-        docs_ids = docs_execute.get_docs_ids_by_file_name(file_name)
+    def get_sources(self) -> List[str]:
+        """Get all sources."""
+        sources = docs_execute.get_existing_sources()
+
+        return sources
+
+    def delete_docs_by_source(self, source: str):
+        """Delete documents by source."""
+        docs_ids = docs_execute.get_docs_ids_by_source(source)
         for doc_id in docs_ids:
             self.index.delete_ref_doc(doc_id, delete_from_docstore=True)
         return docs_ids
 
     def delete_all_docs(self):
         """Delete all documents."""
-        file_names = self.get_files()
+        sources = self.get_sources()
 
-        for file_name in file_names:
-            self.delete_docs_by_file_name(file_name)
-            self.ingest_helper.delete_file(file_name)
+        for source in sources:
+            self.delete_docs_by_source(source)
+            if source in self.ingest_helper.get_all_files():
+                self.ingest_helper.delete_file(source)
 
-        return file_names
+        return sources
 
 
 ingest_service = IngestService()

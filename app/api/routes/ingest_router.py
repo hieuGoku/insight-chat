@@ -68,14 +68,14 @@ async def ingest_url(url: str):
         return BaseResponse.error_response(message="Internal Server Error")
 
 
-@router.get("/files")
-async def get_files():
-    """Get all files in the local data folder."""
+@router.get("/source")
+async def get_sources():
+    """Get all sources."""
     try:
-        files = ingest_service.get_files()
+        sources = ingest_service.get_sources()
 
         return BaseResponse.success_response(
-            status_code=200, message="Sucessfully retrieved files", data=files
+            status_code=200, message="Sucessfully retrieved files", data=sources
         )
 
     except Exception as e:
@@ -96,11 +96,11 @@ async def get_docs():
         return BaseResponse.error_response(message="Internal Server Error")
 
 
-@router.get("/documents/{file_name}")
-async def get_docs_by_file_name(file_name: str):
+@router.get("/documents/{source}")
+async def get_docs_by_source(source: str):
     """Get documents by file name."""
     try:
-        docs = ingest_service.get_docs_by_file_name(file_name)
+        docs = ingest_service.get_docs_by_source(source)
 
         return docs
 
@@ -109,15 +109,15 @@ async def get_docs_by_file_name(file_name: str):
         return BaseResponse.error_response(message="Internal Server Error")
 
 
-@router.delete("/documents/{file_name}")
-async def delete_docs_by_file_name(file_name: str):
+@router.delete("/documents/{source}")
+async def delete_docs_by_source(source: str):
     """Delete documents by file name."""
     try:
-        docs_ids_deleted = ingest_service.delete_docs_by_file_name(file_name)
+        docs_ids_deleted = ingest_service.delete_docs_by_source(source)
 
         return BaseResponse.success_response(
             status_code=200,
-            message=f"Successfully deleted documents with file name: {file_name}, deleted count: {len(docs_ids_deleted)}",
+            message=f"Successfully deleted documents with source: {source}, deleted count: {len(docs_ids_deleted)}",
             data=docs_ids_deleted,
         )
 

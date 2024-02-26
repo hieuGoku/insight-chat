@@ -24,9 +24,7 @@ async def create_user(user: UserCreateModel):
 
     except Exception as e:
         custom_logger.exception(e)
-        return BaseResponse.error_response(
-            status_code=400, message="Internal Server Error"
-        )
+        return BaseResponse.error_response(message="Internal Server Error")
 
 
 @router.get("", response_model=UserCollectionModel, response_model_by_alias=False)
@@ -37,9 +35,7 @@ async def get_users():
 
     except Exception as e:
         custom_logger.exception(e)
-        return BaseResponse.error_response(
-            status_code=400, message="Internal Server Error"
-        )
+        return BaseResponse.error_response(message="Internal Server Error")
 
 
 @router.get("/{user_id}", response_model=UserModel, response_model_by_alias=False)
@@ -56,9 +52,7 @@ async def get_user(user_id: str):
 
     except Exception as e:
         custom_logger.exception(e)
-        return BaseResponse.error_response(
-            status_code=400, message="Internal Server Error"
-        )
+        return BaseResponse.error_response(message="Internal Server Error")
 
 
 @router.delete("/{user_id}", response_model=UserModel, response_model_by_alias=False)
@@ -72,14 +66,10 @@ async def delete_user(user_id: str):
             )
 
         sessions_user = session_service.get_sessions_by_user_id(user_id)
-        if not sessions_user:
-            return BaseResponse.error_response(
-                status_code=404, message="User has no sessions"
-            )
-
-        for session in sessions_user.sessions:
-            message_service.delete_messages_by_session_id(session.id)
-            session_service.delete_session_by_id(session.id)
+        if sessions_user:
+            for session in sessions_user.sessions:
+                message_service.delete_messages_by_session_id(session.id)
+                session_service.delete_session_by_id(session.id)
 
         user_service.delete_user_by_id(user_id)
 
@@ -89,6 +79,4 @@ async def delete_user(user_id: str):
 
     except Exception as e:
         custom_logger.exception(e)
-        return BaseResponse.error_response(
-            status_code=400, message="Internal Server Error"
-        )
+        return BaseResponse.error_response(message="Internal Server Error")

@@ -32,15 +32,11 @@ async def create_session(session: SessionCreateModel):
     except ValueError as e:
         custom_logger.debug(str(e))
         error_message: BaseErrorMessage = e.args[0]
-        return BaseResponse.error_response(
-            status_code=400, message=error_message.message
-        )
+        return BaseResponse.error_response(message=error_message.message)
 
     except Exception as e:
         custom_logger.exception(e)
-        return BaseResponse.error_response(
-            status_code=400, message="Internal Server Error"
-        )
+        return BaseResponse.error_response(message="Internal Server Error")
 
 
 @router.get("/{session_id}", response_model=SessionModel, response_model_by_alias=False)
@@ -57,9 +53,7 @@ async def get_session(session_id: str):
 
     except Exception as e:
         custom_logger.exception(e)
-        return BaseResponse.error_response(
-            status_code=400, message="Internal Server Error"
-        )
+        return BaseResponse.error_response(message="Internal Server Error")
 
 
 @router.delete("/{session_id}")
@@ -83,6 +77,4 @@ async def delete_session(session_id: str):
 
     except Exception as e:
         custom_logger.exception(e)
-        return BaseResponse.error_response(
-            status_code=400, message="Internal Server Error"
-        )
+        return BaseResponse.error_response(message="Internal Server Error")

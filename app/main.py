@@ -7,7 +7,8 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.responses import Response
 
 from app.api.routes.api_router import api_router
-from app.core.config import config, print_config
+from app.core.setting_rag import settings
+from app.core.config import config
 from app.logger.logger import custom_logger
 
 
@@ -24,6 +25,9 @@ class LoggingMiddleware(BaseHTTPMiddleware):
 
 
 def create_app() -> FastAPI:
+    # Load common settings for RAG
+    settings()
+
     # Start the API
     app = FastAPI(title="Insight Chat", version="0.1.0")
 
