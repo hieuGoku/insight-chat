@@ -10,6 +10,28 @@
 
 - [Atlas Vector Search](https://www.mongodb.com/products/platform/atlas-vector-search) - Atlas Vector Search lets you search unstructured data. You can create vector embeddings with machine learning models like OpenAI and Hugging Face, and store and index them in Atlas for retrieval augmented generation (RAG), semantic search, recommendation engines, dynamic personalization, and other use cases.
 
+**Note:** You need creating a knn index to use Atlas Vector Search.
+
+- Log in to your Atlas account and locate the collection corresponding to the Vector Store. If you are using the default names, it should be “default_store/default_db”.
+- Create a Search index for the collection in tab `Atlas Search`. Choose the “Json Editor” mode and set index with following content:
+
+```
+{
+  "mappings": {
+    "dynamic": true,
+    "fields": {
+      "embedding": {
+        "dimensions": 1536,
+        "similarity": "cosine",
+        "type": "knnVector"
+      }
+    }
+  }
+}
+```
+
+- Wait for a few seconds to let the new index take effect.
+
 ## Run app with uvicorn 🚀
 
 ### Requires
@@ -75,7 +97,30 @@ docker run -d --name insight-chat -p 8080:8080 insight-chat
 
 - Authentication for application.
 
+## Knowledges
+
+### LlamaIndex’s Storage System
+
+In short, LlamaIndex uses the following pattern to store document information:
+
+The text of a document is divided into several Nodes, also known as “chunks”;
+Using the document ID as the primary key, the objects representing each document, mainly metadata such as file name and hash, are stored in the Document Store, along with the list of Nodes for that document;
+Using the Node ID as the primary key, the Node’s embedding is stored in the Vector Store.
+
+![alt text](app/resources/images/storage.png)
+
+The three MongoDB implementations for the Stores are used in this project:
+
+- MongoDocumentStore
+- MongoIndexStore
+- MongoDBAtlasVectorSearch
+
+## References
+
+https://medium.com/@luoning.nici/llamaindex-in-depth-practice-how-to-build-a-reliable-storage-subsystem-with-mongodb-atlas-f306bf2fb480
+
+https://docs.llamaindex.ai/en/stable/index.html
+
+https://www.mongodb.com/atlas
 
 ### If this project helped you, please don't forget to give me a ⭐️. Thanks! 🌟
-
-
